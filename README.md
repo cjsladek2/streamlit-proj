@@ -1,9 +1,6 @@
-# 📦 Streamlit App Starter Kit 
-```
-⬆️ (Replace above with your app's name)
-```
+# My First Streamlit App 
 
-Description of the app ...
+This is me following a YouTube tutorial, hooray!
 
 ## Demo App
 
