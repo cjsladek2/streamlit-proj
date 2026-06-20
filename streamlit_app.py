@@ -1,3 +1,4 @@
+from sklearn.ensemble import RandomForestClassifier
 import streamlit as st
 import pandas as pd
 
@@ -12,13 +13,23 @@ def make_slider(title: str, column_name : str, double_ended : bool):
     else:
         return st.slider(title, min_value = min, max_value = max)
 
+st.set_page_config(
+    page_title="Penguin Explorer",
+    page_icon=":material/owl:",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    
+)
+
+st.logo("logo.png")
+st.image("penguin_banner.png")
 st.title('Penguin Explorer')
 
 with st.sidebar:
         explore, predict = st.tabs([":material/filter_alt: Explore", ":material/wand_stars: Predict"])
     
         with explore:
-            st.header("Explore Data")
+            st.header("Visualization Filters")
             # MULTI-SELECT BOXES ------------------------------------------------------------
             species = st.multiselect("Species", options = df.species.unique())
             island = st.multiselect("Island", options = df.island.unique())
@@ -32,7 +43,7 @@ with st.sidebar:
             body_mass_g = make_slider("Body Mass (g)", "body_mass_g", True)
                     
         with predict:
-            st.header("Predict Species")
+            st.header("Prediction Input Features")
             # "island","bill_length_mm","bill_depth_mm","flipper_length_mm","body_mass_g","sex"
             
             # SELECT BOXES ------------------------------------------------------------        
@@ -58,7 +69,8 @@ with st.sidebar:
             input_row = pd.DataFrame(prediction_data, index = [0])
             
             # you gotta be really careful with how you concatentate thing b/c it is funky (and if you column names don't match perfectly weird stuff will happen)
-            concat_df = pd.concat([input_row, df], axis = 0)
+            X = df.drop('species', axis = 1) # remove species so we don't have None for species in the input row when we
+            concat_df = pd.concat([input_row, X], axis = 0)
             
             # pd.get_dummies() converts categorical variables into dummy/indicator variables
             # through a process called one-hot encoding. It breaks a single column containing
@@ -74,25 +86,31 @@ with st.sidebar:
                 "Gentoo": 2
             }
             
-            # Encoding function (w/ type hints!)
-            def target_encode(species : str) -> int:
-                return target_mapper[species]
+            reversed_mapper = {v: k for k, v in target_mapper.items()}
+        
             
-            y_encoded = df.species.apply(target_encode) # applies this function to this column
+            Y_encoded = df.species.apply(lambda species : target_mapper[species]) # applies this function to this column
             
-with st.expander("Raw Data"):
+            # Model Building (random forest classifier)
+            model = RandomForestClassifier()
+            model.fit(encoded_df[1:], Y_encoded) # fit on all rows except the last one (which is the input row)
+            prediction = model.predict(encoded_input_row := encoded_df[:1]) # predict on the first row of the encoded df (which is the input row)
+            prediction_probability = model.predict_proba(encoded_input_row)
+
+data, visualize, results = st.tabs([":material/database: Raw Data", ":material/bubble_chart: Visualizations", ":material/owl: Prediction Results"])
+with data:
     # Display data frame
-    df
+    with st.expander('**Full Dataframe**'):
+        df
     
-    st.write('**X**')
-    X = df.drop('species', axis = 1)
-    X # Display the X variables 
+    with st.expander('**Predictor Variables (X\'s)**'):
+        X # Display the X variables 
     
-    st.write('**Y**')
-    Y = df.species
-    Y # Display the Y variable
+    with st.expander('**Dependent Variable (Y)**'):
+        Y = df.species
+        Y # Display the Y variable
     
-with st.expander("Data Visualization"):
+with visualize:
     st.write("**Bill Length vs. Bill Depth**")
     st.scatter_chart(data = df,
                      x = 'bill_length_mm',
@@ -108,10 +126,21 @@ with st.expander("Data Visualization"):
                      x_label = "Bill Length (mm)",
                      y_label = "Body Mass (g)",
                      color = 'species')
-with st.expander("Predictions"):
-    st.write("**Input Features**")
-    st.write("Input row")
-    input_row
+with results:
+    with st.expander("**Input Features**"):
+        st.write("Input Row")
+        input_row
+        
+        st.write("Encoded Input Row")
+        encoded_df[:1]
     
-    st.write("Encoded input row")
-    encoded_df[:1]
+    prediction_display = reversed_mapper[prediction.item()]
+    st.write(f"**Prediction:** :primary-badge[{prediction_display}]")
+    st.write("**Prediction Probability**")
+    prediction_probability_labeled = pd.DataFrame(
+        prediction_probability, #NumPy array
+        columns=[reversed_mapper[i] for i in range(3)] #what to name the columns ig
+    )
+    #df.species.apply(lambda species : target_mapper[species]) # applies this function to this column
+
+    prediction_probability_labeled
